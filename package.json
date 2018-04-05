@@ -1,7 +1,7 @@
 {
   "name": "neural-network-rockets",
   "version": "1.0.0",
-  "description": "neural network guide rockets shooting to the moon",
+  "description": "neural network guided rockets shooting to the moon",
   "scripts": {
     "build": "webpack",
     "serve": "webpack-dev-server --mode development --open"
