@@ -10,6 +10,10 @@
   version "4.7.2"
   resolved "https://registry.yarnpkg.com/@types/pixi.js/-/pixi.js-4.7.2.tgz#dd2b56db6e3785c223db5debeb89a935512e22c9"
 
+"@types/synaptic@^1.0.3":
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/@types/synaptic/-/synaptic-1.0.3.tgz#9bb132018cfc27d1476515960c29ce93403df7b1"
+
 abbrev@1:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/abbrev/-/abbrev-1.1.1.tgz#f8f2c887ad10bf67f634f005b6987fed3179aac8"

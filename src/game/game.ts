@@ -6,6 +6,7 @@ import { Population } from '../genetics/population';
 import { Obstacle } from './obstacle';
 import * as moon from '../assets/moon.png';
 import * as bg from '../assets/background.jpg';
+import { IKeyListener, keyboard } from '../helpers/keyboad';
 
 export class Game {
     renderer: PIXI.WebGLRenderer;
@@ -18,6 +19,7 @@ export class Game {
     rocketsToShow: number;
     stopped: boolean = false;
     inialized: boolean = false;
+    keyListeners: { listner: IKeyListener, vector: Vector }[];
 
     public init(obstacleNumber: number, rocketNumber: number, targetPositon: Vector, rendererSize: { height: number, width: number }, rocketLifeSpan: number, rocketsToShow: number) {
         this.stop();
@@ -31,9 +33,30 @@ export class Game {
             this.target = targetPositon;
             this.generateTargetSprite();
             this.rockets = this.generateRockets(rocketNumber, rocketLifeSpan);
-            this.population = new Population<Vector[]>(this.rockets.map(x => x.dna));
+            // this.population = new Population<Vector[]>(this.rockets.map(x => x.dna));
+            this.keyListeners = [];
+            this.keyListeners.push(
+                {
+                    listner: keyboard(38),
+                    vector: new Vector(0, 1)
+                }, {
+                    listner: keyboard(40),
+                    vector: new Vector(0, -1)
+                }
+                , {
+                    listner: keyboard(37),
+                    vector: new Vector(1, 0)
+                }, {
+                    listner: keyboard(39),
+                    vector: new Vector(-1, 0)
+                });
+            this.keyListeners.forEach(x => {
+                x.listner.press = () => this.bestRocket.forEach(r => r.applyForce(x.vector));
+            })
+
             this.start();
-        },100);
+        }, 100);
+
     }
 
     public stop() {
@@ -63,16 +86,16 @@ export class Game {
 
     private getBestRocket(size: number) {
         this.rockets.forEach(x => x.evaluate(this.target, this.obstacles, this.renderer.width, this.renderer.height));
-        this.bestRocket = this.rockets.sort((x, y) => y.dna.fitness - x.dna.fitness).slice(0, size);
+        // this.bestRocket = this.rockets.sort((x, y) => y.dna.fitness - x.dna.fitness).slice(0, size);
+        this.bestRocket = this.rockets.slice(0, size);
         this.bestRocket.forEach(x => x.resetPosition());
-        this.bestRocket.forEach(x => x.dna.succeed = 1);
+        // this.bestRocket.forEach(x => x.dna.succeed = 1);
     }
 
     private generateRockets = (popSize: number, lifeSpan: number): Rocket[] => {
         let rockets: Rocket[] = []
         for (let i = 0; i < popSize; i++) {
-            let dna = new VectorDna(this.generateDnaGenes(lifeSpan), this.target);
-            let rocket = new Rocket(this.stage, dna, new Vector(this.renderer.width / 2, this.renderer.height));
+            let rocket = new Rocket(this.stage, new Vector(this.renderer.width / 2, this.renderer.height));
             rockets.push(rocket);
         }
         this.rockets = rockets;
@@ -126,7 +149,7 @@ export class Game {
                 rocket.isCrashed = true;
             }
 
-            if (rocket.position.x > this.renderer.width || rocket.position.x < 0 || rocket.position.y > this.renderer.height || rocket.position.y < 0) {
+            if (rocket.position.x > this.renderer.width || rocket.position.x < 0 || rocket.position.y > this.renderer.height+10 || rocket.position.y < 0) {
                 rocket.isCrashed = true;
             }
 
@@ -134,7 +157,7 @@ export class Game {
                 needReset = true;
             }
         });
-        if (needReset || this.bestRocket.every(x => x.isCrashed || x.dna.succeed > 1)) {
+        if (needReset || this.bestRocket.every(x => x.isCrashed)) {
             this.resetRocket();
             this.getBestRocket(this.rocketsToShow);
         }
