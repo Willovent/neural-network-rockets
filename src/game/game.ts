@@ -7,7 +7,8 @@ import { Obstacle } from './obstacle';
 import * as moon from '../assets/moon.png';
 import * as bg from '../assets/background.jpg';
 import { IKeyListener, keyboard } from '../helpers/keyboad';
-
+import { NeuralDna } from '../genetics/neuralDna';
+import * as Synaptic from 'synaptic';
 export class Game {
     renderer: PIXI.WebGLRenderer;
     stage = new PIXI.Container();
@@ -15,7 +16,7 @@ export class Game {
     target: Vector;
     rockets: Rocket[];
     bestRocket: Rocket[];
-    population: Population<Vector[]>;
+    population: Population<Synaptic.Architect.Perceptron>;
     rocketsToShow: number;
     stopped: boolean = false;
     inialized: boolean = false;
@@ -33,22 +34,22 @@ export class Game {
             this.target = targetPositon;
             this.generateTargetSprite();
             this.rockets = this.generateRockets(rocketNumber, rocketLifeSpan);
-            // this.population = new Population<Vector[]>(this.rockets.map(x => x.dna));
+            this.population = new Population<Synaptic.Architect.Perceptron>(this.rockets.map(x => x.dna));
             this.keyListeners = [];
             this.keyListeners.push(
                 {
                     listner: keyboard(38),
-                    vector: new Vector(0, 1)
+                    vector: new Vector(0, -1)
                 }, {
                     listner: keyboard(40),
-                    vector: new Vector(0, -1)
+                    vector: new Vector(0, 1)
                 }
                 , {
                     listner: keyboard(37),
-                    vector: new Vector(1, 0)
+                    vector: new Vector(-1, 0)
                 }, {
                     listner: keyboard(39),
-                    vector: new Vector(-1, 0)
+                    vector: new Vector(1, 0)
                 });
             this.keyListeners.forEach(x => {
                 x.listner.press = () => this.bestRocket.forEach(r => r.applyForce(x.vector));
@@ -69,10 +70,12 @@ export class Game {
     }
 
     private resetRocket() {
+        let maxFit = Math.max(...this.rockets.map(x => x.dna.fitness));
+        console.log(maxFit);
         let newDnas = this.population.nextGeneration();
         let i = 0;
         this.rockets.forEach(rocket => {
-            rocket.resetRocket(<VectorDna>newDnas[i++]);
+            rocket.resetRocket(<NeuralDna>newDnas[i++]);
         });
     }
 
@@ -85,22 +88,38 @@ export class Game {
     }
 
     private getBestRocket(size: number) {
-        this.rockets.forEach(x => x.evaluate(this.target, this.obstacles, this.renderer.width, this.renderer.height));
+        // this.rockets.forEach(x => x.evaluate(this.target, this.obstacles, this.renderer.width, this.renderer.height));
         // this.bestRocket = this.rockets.sort((x, y) => y.dna.fitness - x.dna.fitness).slice(0, size);
         this.bestRocket = this.rockets.slice(0, size);
         this.bestRocket.forEach(x => x.resetPosition());
-        // this.bestRocket.forEach(x => x.dna.succeed = 1);
+        this.bestRocket.forEach(x => x.dna.succeed = 1);
     }
 
     private generateRockets = (popSize: number, lifeSpan: number): Rocket[] => {
         let rockets: Rocket[] = []
         for (let i = 0; i < popSize; i++) {
-            let rocket = new Rocket(this.stage, new Vector(this.renderer.width / 2, this.renderer.height));
+            let network = new Synaptic.Architect.Perceptron(7, 10, 10, 1);
+            this.trainNetwork(network);
+            let dna = new NeuralDna(network, this.target);
+            let rocket = new Rocket(this.stage, dna, new Vector(this.renderer.width / 2, this.renderer.height));
             rockets.push(rocket);
         }
         this.rockets = rockets;
         this.getBestRocket(this.rocketsToShow);
         return rockets
+    }
+
+    private trainNetwork(network){
+        let set = new Array(20).fill(0).map(x => {
+            let inputs = new Array(7).fill(0).map(x => Math.random());
+            let output = inputs[6];
+            return {
+                input: inputs,
+                output: [output]
+            }
+        });
+        let trainer = new Synaptic.Trainer(network);
+        trainer.train(set);
     }
 
     private generateDnaGenes = (lifeSpan: number) => {
@@ -143,13 +162,44 @@ export class Game {
 
     private gameLoop() {
         let needReset = false;
-        this.bestRocket.forEach(rocket => {
+        let max = Math.max(this.renderer.height, this.renderer.height);
+        this.bestRocket.filter(x => !x.isCrashed).forEach(rocket => {
+            let inputs = []
+            let rocketnegate = rocket.position.clone().mult(-1);
+            rocket.eyes.forEach(e => {
+                let collision = this.obstacles.map(o => ({ o, dist: e.dot(o.position.clone().add(rocketnegate)) })).filter(o => {
+                    return o.o.checkColision(e.clone().mult(o.dist).add(rocket.position));
+                });
+                let min = 1;
+                if (collision.length) {
+                    min = collision.reduce((o, min) => o.dist < min.dist ? o : min).dist;
+                } else {
+                    let walls = [
+                        Vector.interception(rocket.position, e, new Vector(0, 0), new Vector(0, this.renderer.height)),
+                        Vector.interception(rocket.position, e, new Vector(0, 0), new Vector(this.renderer.width, 0)),
+                        Vector.interception(rocket.position, e, new Vector(this.renderer.width, this.renderer.height), new Vector(-this.renderer.width, 0)),
+                        Vector.interception(rocket.position, e, new Vector(this.renderer.width, this.renderer.height), new Vector(0, -this.renderer.height))
+                    ].filter(x => x);
+                    if (walls.length) {
+                        min = walls[0].dist(rocket.position);
+                    }
+                }
+                inputs.push(min / max);
+                e.mult(min).add(rocket.position);        
+            });
+            inputs.push((rocket.velocity.getAngle() + Math.PI) / (Math.PI * 2));
+            inputs.push((this.target.clone().add(rocketnegate).getAngle() + Math.PI) / (Math.PI * 2));
+            let result = rocket.dna.genes.activate(inputs)[0];
+            if (result) {
+                rocket.applyForce(Vector.fromAngle((result * Math.PI * 2) - Math.PI));
+            }
             rocket.show();
+
             if (this.obstacles.some(obs => obs.checkColision(rocket.position))) {
                 rocket.isCrashed = true;
             }
 
-            if (rocket.position.x > this.renderer.width || rocket.position.x < 0 || rocket.position.y > this.renderer.height+10 || rocket.position.y < 0) {
+            if (rocket.position.x > this.renderer.width || rocket.position.x < 0 || rocket.position.y > this.renderer.height + 10 || rocket.position.y < 0) {
                 rocket.isCrashed = true;
             }
 
@@ -157,7 +207,7 @@ export class Game {
                 needReset = true;
             }
         });
-        if (needReset || this.bestRocket.every(x => x.isCrashed)) {
+        if (needReset || this.bestRocket.every(x => x.isCrashed || x.dna.succeed > 1)) {
             this.resetRocket();
             this.getBestRocket(this.rocketsToShow);
         }

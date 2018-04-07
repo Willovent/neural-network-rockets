@@ -40,8 +40,37 @@ export class Vector {
         this.y = (Math.abs(this.y) > max) ? (this.y * 0.9) : this.y;
     }
 
-    getAngle(){
+    dot(vector: Vector) {
+        return Math.abs(this.x * vector.x + this.y * vector.y);
+    }
+
+    getAngle() {
         return Math.atan2(this.y, this.x);
+    }
+
+    static interception(position: Vector, direction: Vector, position2: Vector, direction2: Vector): Vector {
+        let end1 = position.clone().add(direction);
+        let end2 = position2.clone().add(direction2);
+        let a, b;
+        let dem = ((end2.y - position2.y) * (end1.x - position.x)) - ((end2.x - position2.x) * (end1.y - position.y));
+        if (dem == 0) {
+            return null;
+        }
+        a = position.y - position2.y;
+        b = position.x - position2.x;
+        let numerator1 = ((end2.x - position2.x) * a) - ((end2.y - position2.y) * b);
+        let numerator2 = ((end1.x - position.x) * a) - ((end1.y - position.y) * b);
+        a = numerator1 / dem;
+        b = numerator2 / dem;
+    
+        // if we cast these lines infinitely in both directions, they intersect here:
+        if (b > 0 && b < 1 && a > 0) {
+            let x = position.x + (a * (end1.x - position.x));
+            let y = position.y + (a * (end1.y - position.y));
+            return new Vector(x, y);
+        } else {
+            return null;
+        }
     }
 
     clone = (): Vector => new Vector(this.x, this.y);
